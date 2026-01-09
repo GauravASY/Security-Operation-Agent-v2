@@ -412,13 +412,17 @@ dependencies = [
     { name = "boto3" },
     { name = "chromadb" },
     { name = "dotenv" },
+    { name = "fastapi" },
     { name = "gradio" },
     { name = "ollama" },
     { name = "openai-agents", extra = ["litellm"] },
+    { name = "openai-chatkit" },
     { name = "psycopg2" },
     { name = "pydantic" },
+    { name = "python-multipart" },
     { name = "requests" },
     { name = "unstructured", extra = ["all-docs"] },
+    { name = "uvicorn", extra = ["standard"] },
 ]
 
 [package.metadata]
@@ -427,13 +431,17 @@ requires-dist = [
     { name = "boto3", specifier = ">=1.42.13" },
     { name = "chromadb", specifier = ">=1.3.7" },
     { name = "dotenv", specifier = ">=0.9.9" },
+    { name = "fastapi", specifier = ">=0.104.0" },
     { name = "gradio", specifier = ">=6.1.0" },
     { name = "ollama", specifier = ">=0.6.1" },
     { name = "openai-agents", extras = ["litellm"], specifier = ">=0.6.2" },
+    { name = "openai-chatkit", specifier = ">=1.5.0" },
     { name = "psycopg2", specifier = ">=2.9.11" },
     { name = "pydantic", specifier = ">=2.12.4" },
+    { name = "python-multipart", specifier = ">=0.0.6" },
     { name = "requests", specifier = ">=2.32.5" },
     { name = "unstructured", extras = ["all-docs"], specifier = ">=0.18.21" },
+    { name = "uvicorn", extras = ["standard"], specifier = ">=0.24.0" },
 ]
 
 [[package]]
@@ -2348,6 +2356,22 @@ wheels = [
 [package.optional-dependencies]
 litellm = [
     { name = "litellm" },
+]
+
+[[package]]
+name = "openai-chatkit"
+version = "1.5.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "jinja2" },
+    { name = "openai" },
+    { name = "openai-agents" },
+    { name = "pydantic" },
+    { name = "uvicorn" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/a9/0d/b8d9666d5b3fef50b000ff5ba75b6138c729fba8fae79dbce8d3fbd9df66/openai_chatkit-1.5.0.tar.gz", hash = "sha256:17f362d26c2a9bc14c36fcb157768108e3195bf7265a8914507e4aa497133327", size = 58770, upload-time = "2026-01-06T20:33:17.487Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/8d/c5/e93fffca480ce0b622ca047a36d3484401ea4f0800e133a5f7fb36ee3ca1/openai_chatkit-1.5.0-py3-none-any.whl", hash = "sha256:0cd22e4b6263d9c001190e22430f5190f7745abbcbbaa47392bd3e5b0c9e79b0", size = 41348, upload-time = "2026-01-06T20:33:16.011Z" },
 ]
 
 [[package]]
