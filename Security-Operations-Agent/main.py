@@ -9,7 +9,39 @@ from vectorstore import ingest_txt
 from utils import upload_file_to_s3
 from database import init_db
 import gradio as gr
+import uvicorn
 
+from chatkit.server import StreamingResult
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, Response, StreamingResponse
+from chatkit_server import MyAgentServer
+
+app = FastAPI(title="ChatKit Backend")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+chatkit_server = MyAgentServer()
+
+
+@app.post("/chatkit")
+async def chatkit_endpoint(request: Request) -> Response:
+    """Proxy the ChatKit web component payload to the server implementation."""
+    payload = await request.body()
+    result = await chatkit_server.process(payload, {"request": request})
+    print("Result from endpoint:\n", result)
+
+    if isinstance(result, StreamingResult):
+        return StreamingResponse(result, media_type="text/event-stream")
+    if hasattr(result, "json"):
+        return Response(content=result.json, media_type="application/json")
+    return JSONResponse(result)
 
 import traceback
 
@@ -159,18 +191,6 @@ async def handleChat(messages, history):
         yield f"Unexpected Critical Error: {e}"
 
 
-async def main():
-    init_db()
-    gr.ChatInterface(
-        fn=handleChat,
-        title="CERT SIEM POC v2.5",
-        autoscroll=True,
-        fill_height=True,
-        save_history=True,
-        multimodal=True,
-        textbox=gr.MultimodalTextbox(file_count="multiple", file_types=[".txt"], sources=["upload"])
-    ).launch(footer_links=[])
-        
-
 if __name__ == "__main__":
-    asyncio.run(main())
+    init_db()
+    uvicorn.run(app, host="0.0.0.0", port=8000)
