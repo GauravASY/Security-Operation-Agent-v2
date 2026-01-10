@@ -2,3 +2,4 @@
 .env
 __pycache__/
 my_local_db
+chat_history.json
