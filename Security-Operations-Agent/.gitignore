@@ -3,3 +3,5 @@
 __pycache__/
 my_local_db
 chat_history.json
+temp_uploads
+chat_history.json.*
