@@ -1,21 +1,20 @@
 from agents import Runner, trace, set_tracing_export_api_key
 from openai.types.responses import ResponseTextDeltaEvent
-import asyncio, os, json, re
+import  os
 from dotenv import load_dotenv
 load_dotenv()
-from llmAgent import career_assistant
 from tools import get_file_content, search_indicators_by_report, search_by_victim, get_reportsID_by_technique, get_reports_by_reportID
 from vectorstore import ingest_txt
 from utils import upload_file_to_s3
 from database import init_db
-import gradio as gr
 import uvicorn
 
 from chatkit.server import StreamingResult
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 from chatkit_server import MyAgentServer
+import shutil
 
 app = FastAPI(title="ChatKit Backend")
 
@@ -35,7 +34,6 @@ async def chatkit_endpoint(request: Request) -> Response:
     """Proxy the ChatKit web component payload to the server implementation."""
     payload = await request.body()
     result = await chatkit_server.process(payload, {"request": request})
-    print("Result from endpoint:\n", result)
 
     if isinstance(result, StreamingResult):
         return StreamingResponse(result, media_type="text/event-stream")
@@ -43,10 +41,27 @@ async def chatkit_endpoint(request: Request) -> Response:
         return Response(content=result.json, media_type="application/json")
     return JSONResponse(result)
 
-import traceback
 
-tracing_api_key = os.environ["OPENAI_API_KEY"]
-set_tracing_export_api_key(tracing_api_key)
+UPLOAD_DIR = "temp_uploads"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+@app.put("/api/upload")
+async def handle_file_upload(request: Request, filename: str):
+    file_path = os.path.join(UPLOAD_DIR, filename)
+    
+    # Save file
+    content = await request.body()
+    with open(file_path, "wb") as buffer:
+        buffer.write(content)
+
+    s3_response = upload_file_to_s3(file_path, os.environ.get("S3_BUCKET_NAME"))   
+    result = await ingest_txt(file_path, s3_url=s3_response)
+    
+    if result["success"]:
+        return Response(content="```File uploaded successfully```", media_type="text/plain")
+    else:
+        return Response(content="```File upload failed```", media_type="text/plain")
+
 
 if __name__ == "__main__":
     init_db()
