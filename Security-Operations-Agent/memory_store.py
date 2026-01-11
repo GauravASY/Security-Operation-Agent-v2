@@ -24,6 +24,7 @@ class MemoryStore(Store[dict]):
     def __init__(self):
         self.threads: dict[str, ThreadMetadata] = {}
         self.items: dict[str, list[ThreadItem]] = defaultdict(list)
+        self.attachments: dict[str, Attachment] = {}
         self._load_db()
 
     def _load_db(self):
@@ -40,6 +41,21 @@ class MemoryStore(Store[dict]):
 
             for tid, i_list in data.get("items", {}).items():
                 self.items[tid] = [item_adapter.validate_python(i) for i in i_list]
+
+            for att_id, att_data in data.get("attachments", {}).items():
+                 # Assuming Attachment can be validated similarly or is a dict
+                 if isinstance(att_data, dict):
+                     # Reconstruct FileAttachment or ImageAttachment based on available fields or type
+                     # For simplicity using direct dict or generic Attachment if possible
+                     # TypeAdapter for Attachment (union) should work
+                     pass
+                 pass 
+            
+            # Better approach for attachments if type adapter is tricky without discriminator
+            # But Attachment IS a Union in chatkit.types. Using TypeAdapter(Attachment)
+            att_adapter = TypeAdapter(Attachment)
+            for att_id, att_data in data.get("attachments", {}).items():
+                self.attachments[att_id] = att_adapter.validate_python(att_data)
         except Exception as e:
             print(f"Warning: Could not load chat history: {e}")
 
@@ -54,6 +70,10 @@ class MemoryStore(Store[dict]):
                 "items": {
                     k: [item_adapter.dump_python(i, mode='json') for i in v] 
                     for k, v in self.items.items()
+                },
+                "attachments": {
+                    k:  TypeAdapter(Attachment).dump_python(v, mode='json')
+                    for k, v in self.attachments.items()
                 }
             }
             with open(DB_FILE, "w", encoding="utf-8") as f:
@@ -186,10 +206,16 @@ class MemoryStore(Store[dict]):
         return Page(data=data, has_more=has_more, after=next_after)
 
     async def save_attachment(self, attachment: Attachment, context: dict) -> None:
-        raise NotImplementedError()
-
+        self.attachments[attachment.id] = attachment
+        self._save_db()
+    
     async def load_attachment(self, attachment_id: str, context: dict) -> Attachment:
-        raise NotImplementedError()
+        self._load_db()
+        if attachment_id not in self.attachments:
+            raise NotFoundError(f"Attachment {attachment_id} not found")
+        return self.attachments[attachment_id]
 
     async def delete_attachment(self, attachment_id: str, context: dict) -> None:
-        raise NotImplementedError()
+        if attachment_id in self.attachments:
+            del self.attachments[attachment_id]
+            self._save_db()
