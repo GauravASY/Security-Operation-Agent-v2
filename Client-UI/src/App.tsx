@@ -4,7 +4,18 @@ export default function App() {
   const chatkit = useChatKit({
     api: {
       url: "http://localhost:8000/chatkit",
-      domainKey: "local-dev-poc", // domain keys are optional in dev
+      domainKey: "local-dev-poc",
+      uploadStrategy: { type: "two_phase" }
+    },
+    composer: {
+      attachments: {
+        enabled: true,
+        accept: {
+          'text/plain': ['.txt'],
+          'application/pdf': ['.pdf']
+        },
+        maxCount: 5,
+      },
     },
   });
 
