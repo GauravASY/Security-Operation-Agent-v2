@@ -16,6 +16,7 @@ emb_fn = OllamaEmbeddingFunction(
 collection = client.get_or_create_collection(name="pdf_knowledge_base_v2", embedding_function=emb_fn)
 
 async def ingest_txt(file_path, s3_url):
+    print("Ingesting file: ", file_path)
     from llmAgent import extraction_assistant
     try:
         document = partition_text(filename=file_path)
