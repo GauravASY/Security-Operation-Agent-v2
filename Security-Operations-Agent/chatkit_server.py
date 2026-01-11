@@ -9,6 +9,7 @@ from chatkit.agents import AgentContext, simple_to_agent_input, stream_agent_res
 from chatkit.server import ChatKitServer
 from chatkit.types import ThreadMetadata, ThreadStreamEvent, UserMessageItem
 from memory_store import MemoryStore
+from attachmentStore import BlobAttachmentStore
 from llmAgent import career_assistant
 
 # Import your tools so they can be executed inside the server
@@ -25,7 +26,8 @@ class MyAgentServer(ChatKitServer[dict[str, Any]]):
 
     def __init__(self) -> None:
         self.store: MemoryStore = MemoryStore()
-        super().__init__(self.store)
+        self.attachment_store: BlobAttachmentStore = BlobAttachmentStore(store=self.store)
+        super().__init__(store=self.store, attachment_store=self.attachment_store)
 
     async def respond(
         self,
@@ -68,7 +70,6 @@ class MyAgentServer(ChatKitServer[dict[str, Any]]):
 
         # 3. Start the ReAct Loop (Max Turns)
         max_turns = 5
-        accumulated_response = ""
         
         for turn in range(max_turns):
             full_turn_response = ""
