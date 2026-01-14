@@ -57,7 +57,7 @@ The application follows a client-server architecture with the following componen
   - Semantic search across uploaded documents
 
 - **Multi-Agent System**: Specialized agents with distinct capabilities:
-  - Main Agent: Primary interface for user interactions and job searches
+  - Main Agent: Primary interface for user interactions and tool orchestrationss
   - Analysis Agent: Specialized in threat analysis and report processing
 
 ### Technical Features
