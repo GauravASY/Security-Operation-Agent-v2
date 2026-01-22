@@ -11,7 +11,7 @@ import uuid
 client = chromadb.PersistentClient(path="./my_local_db")
 emb_fn = OllamaEmbeddingFunction(
     url = "http://localhost:11434",
-    model_name="mxbai-embed-large:335m"
+    model_name="mxbai-embed-large:latest"
 )
 collection = client.get_or_create_collection(name="pdf_knowledge_base_v2", embedding_function=emb_fn)
 
