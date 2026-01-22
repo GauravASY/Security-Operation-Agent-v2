@@ -17,7 +17,6 @@ class BlobAttachmentStore(AttachmentStore[dict]):
     async def create_attachment(
         self, input: AttachmentCreateParams, context: dict
     ) -> Attachment:
-        
         att_id = self.generate_attachment_id(input.mime_type, context)
         upload_url = f"{BASE_URL}/api/upload?filename={input.name}" 
         upload_descriptor = AttachmentUploadDescriptor(url=upload_url, method="PUT")
