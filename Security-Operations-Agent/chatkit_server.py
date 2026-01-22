@@ -3,11 +3,12 @@ import uuid
 import json
 import re
 import traceback
+from datetime import datetime
 
 from agents import Runner
 from chatkit.agents import AgentContext, simple_to_agent_input, stream_agent_response
 from chatkit.server import ChatKitServer
-from chatkit.types import ThreadMetadata, ThreadStreamEvent, UserMessageItem
+from chatkit.types import ThreadMetadata, ThreadStreamEvent, UserMessageItem, AssistantMessageItem, ThreadItemAddedEvent, ThreadItemDoneEvent
 from memory_store import MemoryStore
 from attachmentStore import BlobAttachmentStore
 from llmAgent import career_assistant
@@ -60,9 +61,24 @@ class MyAgentServer(ChatKitServer[dict[str, Any]]):
                  if hasattr(db_item.content[0], 'text'):
                     conversation_chain.append({"role": role, "content": db_item.content[0].text})
 
-        # Add the current new item if it exists and isn't in DB yet (ChatKit sometimes adds it before, sometimes not)
-        # If 'item' is passed to respond, it usually means it's the new user message.
+        # Add the current new item if it exists and isn't in DB yet
         # Check if the last message in chain is the same as item to avoid duplication.
+        print("The User message is : ", item)
+        if item and len(item.content) == 0 and len(item.attachments) > 0:
+            assistant_item = AssistantMessageItem(
+                id=forced_id,
+                thread_id=thread.id,
+                created_at=datetime.utcnow(),
+                content=[{"type": "output_text", "text": "File upload successful."}],
+            )
+
+            yield ThreadItemAddedEvent(item=assistant_item)
+            yield ThreadItemDoneEvent(item=assistant_item)
+
+            return
+                
+            
+        # Here we check is the item is only attachment or text or both
         if item and item.content and hasattr(item.content[0], 'text'):
              current_text = item.content[0].text
              if not conversation_chain or conversation_chain[-1]['content'] != current_text:
@@ -79,6 +95,7 @@ class MyAgentServer(ChatKitServer[dict[str, Any]]):
             agent_context = AgentContext(
                 thread=thread,
                 store=self.store,
+                attachment_store=self.attachment_store,
                 request_context=context,
             )
 
