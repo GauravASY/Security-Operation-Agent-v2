@@ -8,7 +8,7 @@ from datetime import datetime
 from agents import Runner
 from chatkit.agents import AgentContext, simple_to_agent_input, stream_agent_response
 from chatkit.server import ChatKitServer
-from chatkit.types import ThreadMetadata, ThreadStreamEvent, UserMessageItem, AssistantMessageItem, ThreadItemAddedEvent, ThreadItemDoneEvent
+from chatkit.types import ThreadMetadata, ThreadStreamEvent, UserMessageItem, AssistantMessageItem, ThreadItemAddedEvent, ThreadItemDoneEvent, InferenceOptions
 from memory_store import MemoryStore
 from attachmentStore import BlobAttachmentStore
 from llmAgent import career_assistant
@@ -65,6 +65,16 @@ class MyAgentServer(ChatKitServer[dict[str, Any]]):
         # Check if the last message in chain is the same as item to avoid duplication.
         print("The User message is : ", item)
         if item and len(item.content) == 0 and len(item.attachments) > 0:
+            synthetic_user_item = UserMessageItem(
+            id=f"msg_{uuid.uuid4().hex[:8]}",
+            thread_id=thread.id,
+            created_at=datetime.utcnow(),
+            content=[{"type": "input_text", "text": f"User uploaded a file {item.attachments[0].name}"}],
+            inference_options=InferenceOptions(tool_choice=None, model=None)
+        )
+
+            yield ThreadItemAddedEvent(item=synthetic_user_item)
+            yield ThreadItemDoneEvent(item=synthetic_user_item)
             assistant_item = AssistantMessageItem(
                 id=forced_id,
                 thread_id=thread.id,
