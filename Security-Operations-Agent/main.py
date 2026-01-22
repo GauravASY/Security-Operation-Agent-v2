@@ -56,11 +56,7 @@ async def handle_file_upload(request: Request, filename: str):
 
     s3_response = upload_file_to_s3(file_path, os.environ.get("S3_BUCKET_NAME"))   
     result = await ingest_txt(file_path, s3_url=s3_response)
-    
-    if result["success"]:
-        return Response(content="```File uploaded successfully```", media_type="text/plain")
-    else:
-        return Response(content="```File upload failed```", media_type="text/plain")
+    print("Result for file upload : ", result)
 
 
 if __name__ == "__main__":
