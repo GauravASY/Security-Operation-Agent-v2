@@ -45,10 +45,8 @@ class MemoryStore(Store[dict]):
             for att_id, att_data in data.get("attachments", {}).items():
                  # Assuming Attachment can be validated similarly or is a dict
                  if isinstance(att_data, dict):
-                     # Reconstruct FileAttachment or ImageAttachment based on available fields or type
-                     # For simplicity using direct dict or generic Attachment if possible
-                     # TypeAdapter for Attachment (union) should work
-                     pass
+                     # att_data.name is '5.txt', '4.txt', '2.txt'
+                    pass
                  pass 
             
             # Better approach for attachments if type adapter is tricky without discriminator
