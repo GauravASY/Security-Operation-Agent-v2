@@ -29,8 +29,7 @@ async def ingest_txt(file_path, s3_url):
         extracted_data = await Runner.run(extraction_assistant, content)
         data = extracted_data.final_output
         
-        file_path = file_path.split("\\")[-1]
-        
+        file_path = file_path.split("/")[-1] # file_path is now '4.txt', '5.txt', '2.txt'
         conn = psycopg2.connect(dbname=TARGET_DB, **DB_CONFIG)
         cur = conn.cursor()
         if len(text) > 0:
