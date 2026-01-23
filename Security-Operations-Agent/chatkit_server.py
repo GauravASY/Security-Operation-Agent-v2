@@ -56,14 +56,14 @@ class MyAgentServer(ChatKitServer[dict[str, Any]]):
         
         for db_item in db_items:
             role = "user" if isinstance(db_item, UserMessageItem) else "assistant"
-            # Assuming simple text content for now
+            # create conversation chain for text and attachments( consider user/assistant/user/assistant constraint)
             if db_item.content and len(db_item.content) > 0:
                  if hasattr(db_item.content[0], 'text'):
+                    print("DB Item :\n ", db_item) # checking if the user message is already added during this step
                     conversation_chain.append({"role": role, "content": db_item.content[0].text})
 
         # Add the current new item if it exists and isn't in DB yet
         # Check if the last message in chain is the same as item to avoid duplication.
-        print("The User message is : ", item)
         if item and len(item.content) == 0 and len(item.attachments) > 0:
             synthetic_user_item = UserMessageItem(
             id=f"msg_{uuid.uuid4().hex[:8]}",
@@ -88,11 +88,18 @@ class MyAgentServer(ChatKitServer[dict[str, Any]]):
             return
                 
             
-        # Here we check is the item is only attachment or text or both
+        # adding the user message to the conversation chain if already not present
         if item and item.content and hasattr(item.content[0], 'text'):
              current_text = item.content[0].text
+             final_text = ""
+             if item.attachments and len(item.attachments) > 0 and hasattr(item.attachments[0], 'name'):
+                final_text = f"User uploaded a file {item.attachments[0].name} and asked {current_text}" 
              if not conversation_chain or conversation_chain[-1]['content'] != current_text:
-                 conversation_chain.append({"role": "user", "content": current_text})
+                 conversation_chain.append({"role": "user", "content": final_text})
+             else:
+                 #remove last item from conversation chain
+                 conversation_chain.pop()
+                 conversation_chain.append({"role": "user", "content": final_text})
 
         # 3. Start the ReAct Loop (Max Turns)
         max_turns = 5
@@ -111,6 +118,7 @@ class MyAgentServer(ChatKitServer[dict[str, Any]]):
 
             # Run the Agent
             # Note: We pass the conversation_chain list directly as input
+            print("Conversation Chain just before running agent: ", conversation_chain)
             result = Runner.run_streamed(
                 career_assistant,
                 conversation_chain, 
