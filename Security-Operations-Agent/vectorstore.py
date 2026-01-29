@@ -7,6 +7,7 @@ from chromadb.utils.embedding_functions.ollama_embedding_function import (
     OllamaEmbeddingFunction,
 )
 from unstructured.partition.text import partition_text
+from unstructured.partition.pdf import partition_pdf
 import uuid
 client = chromadb.PersistentClient(path="./my_local_db")
 emb_fn = OllamaEmbeddingFunction(
@@ -19,7 +20,11 @@ async def ingest_txt(file_path, s3_url):
     
     from llmAgent import extraction_assistant
     try:
-        document = partition_text(filename=file_path)
+        file_type  = file_path.split(".")[-1]
+        if file_type == "pdf":
+            document = partition_pdf(filename=file_path, strategy='auto')
+        else:
+            document = partition_text(filename=file_path)
         content = ""
         text=[]
         for doc in document:
