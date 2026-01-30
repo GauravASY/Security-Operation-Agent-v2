@@ -5,6 +5,7 @@ import json
 import chromadb
 from database import DB_CONFIG, TARGET_DB
 from utils import get_token, checkEnvVariable
+import requests
 
 # Connect to DBs
 chroma_client = chromadb.PersistentClient(path="./my_local_db")
@@ -169,7 +170,7 @@ async def get_reports_by_reportID(report_id: int):
 @function_tool
 async def analyse_wazuh_data(size:int = 20, domain:str = "*"):
     """
-    Fetches data from the WAZUH API, analyses it and provides report and recommendations for the user
+    Fetches data from the WAZUH, analyses it and provides report and recommendations for the user
 
     Args:
         size (int, optional): Number of events to fetch. Defaults to 20.
@@ -178,11 +179,36 @@ async def analyse_wazuh_data(size:int = 20, domain:str = "*"):
     WAZUH_URL = checkEnvVariable("WAZUH_URL")
     WAZUH_USER = checkEnvVariable("WAZUH_USER")
     WAZUH_PASS = checkEnvVariable("WAZUH_PASS")
-    WAZUH_API_USER = checkEnvVariable("WAZUH_API_USER")
-    WAZUH_API_PASS = checkEnvVariable("WAZUH_API_PASS")
-    WAZUH_API_URL = checkEnvVariable("WAZUH_API_URL")
 
-    if not WAZUH_URL or not WAZUH_USER or not WAZUH_PASS or not WAZUH_API_USER or not WAZUH_API_PASS or not WAZUH_API_URL:
+    if not WAZUH_URL or not WAZUH_USER or not WAZUH_PASS:
         return "Missing Wazuh environment variables"
     
+    #fetch Wazuh alerts
+    body = {
+        "size": int(size),
+        "sort": [
+            {"@timestamp": {"order": "desc"}}
+        ],
+        "query": {
+            "query_string": {
+                "query": domain or "*"
+            }
+        }
+    }
+
+    resp = requests.post(
+        WAZUH_URL,
+        auth=(WAZUH_USER, WAZUH_PASS),
+        headers={"Content-Type": "application/json"},
+        json=body,
+        verify=False
+    )
+
+    hits = resp.json().get("hits", {}).get("hits", [])
+    events = [hit["_source"] for hit in hits]
+    if not events:
+        return "No events found"
     
+    print("Events from Wazuh Agent : \n", events)
+    return json.dumps(events, indent=2)
+    #analyses the alerts and provides report and recommendations for the user
