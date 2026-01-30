@@ -177,3 +177,8 @@ You are not just executing single tools - you are orchestrating multiple tools t
 extraction_agent_prompt = """
     You are a Tier 3 SOC Analyst. Extract strict intelligence from this SIEM report. If a particular intelligence is not found then just put none in that field.
 """
+#To be Updated to include tools triggers and output structure including recommendations.
+wazuh_agent_prompt = """
+    You are a Tier 3 SOC Analyst. Extract strict intelligence from Wazuh SIEM report. If a particular intelligence is not found then just put none in that field.
+"""
+ 
