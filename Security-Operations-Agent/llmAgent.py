@@ -3,8 +3,8 @@ from agents.extensions.models.litellm_model import LitellmModel
 from openai import AsyncOpenAI
 from agents.models.openai_chatcompletions import OpenAIChatCompletionsModel
 import os
-from prompt import career_assistant_prompt, extraction_agent_prompt
-from tools import search_knowledge_base, search_indicators_by_report, search_by_victim, get_file_content, get_reportsID_by_technique, get_reports_by_reportID
+from prompt import career_assistant_prompt, extraction_agent_prompt, wazuh_agent_prompt
+from tools import search_knowledge_base, search_indicators_by_report, search_by_victim, get_file_content, get_reportsID_by_technique, get_reports_by_reportID, analyse_wazuh_data
 from typing import List, Optional
 from pydantic import BaseModel, Field
 
@@ -51,10 +51,12 @@ extraction_assistant = Agent(
 )
 
 wazuh_agent = Agent(
-    name= "Wazuh Agent",
+    name= "wazuh_agent",
     instructions= wazuh_agent_prompt,
     model= custom_model,
-    instructions="handles all the tasks related to Wazuh"
+    tools = [
+        analyse_wazuh_data
+    ]
 )
 
 career_assistant = Agent(
@@ -75,7 +77,7 @@ career_assistant = Agent(
         get_reportsID_by_technique, 
         get_reports_by_reportID,
         wazuh_agent.as_tool(
-            tool_name="Wazuh_agent",
+            tool_name="wazuh_agent",
             tool_description="Handles all the tasks related to Wazuh. Performs Wazuh analysis, provides recommendations, and performs Wazuh operations"
         )
     ]
