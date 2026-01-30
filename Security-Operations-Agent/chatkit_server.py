@@ -12,6 +12,7 @@ from chatkit.types import ThreadMetadata, ThreadStreamEvent, UserMessageItem, As
 from memory_store import MemoryStore
 from attachmentStore import BlobAttachmentStore
 from llmAgent import career_assistant
+from utils import handling_wazuh_agent
 
 # Import your tools so they can be executed inside the server
 from tools import (
@@ -59,7 +60,6 @@ class MyAgentServer(ChatKitServer[dict[str, Any]]):
             # create conversation chain for text and attachments( consider user/assistant/user/assistant constraint)
             if db_item.content and len(db_item.content) > 0:
                  if hasattr(db_item.content[0], 'text'):
-                    print("DB Item :\n ", db_item) # checking if the user message is already added during this step
                     conversation_chain.append({"role": role, "content": db_item.content[0].text})
 
         # Add the current new item if it exists and isn't in DB yet
@@ -116,9 +116,7 @@ class MyAgentServer(ChatKitServer[dict[str, Any]]):
                 request_context=context,
             )
 
-            # Run the Agent
             # Note: We pass the conversation_chain list directly as input
-            print("Conversation Chain just before running agent: ", conversation_chain)
             result = Runner.run_streamed(
                 career_assistant,
                 conversation_chain, 
@@ -131,21 +129,19 @@ class MyAgentServer(ChatKitServer[dict[str, Any]]):
                 if hasattr(event, "item_id") and (event.item_id == "__fake_id__" or not event.item_id):
                     event.item_id = forced_id
                 
-                # Capture text delta to rebuild the full response string
-                # Note: The specific attribute for text delta in ThreadStreamEvent depends on your ChatKit version.
-                # It is often in event.payload or similar. 
-                # Assuming standard text delta event:
-                if event.type == "message-delta" and hasattr(event, "content") and event.content:
-                     # You might need to adjust this depending on the exact shape of ThreadStreamEvent
-                     for part in event.content:
-                         if hasattr(part, 'text'):
-                             full_turn_response += part.text
+                # Capture text from thread.item.done events
+                if event.type == "thread.item.done" and hasattr(event, "item"):
+                    item_obj = event.item
+                    if hasattr(item_obj, "content") and item_obj.content:
+                        for part in item_obj.content:
+                            if hasattr(part, "text"):
+                                full_turn_response += part.text
 
                 yield event
-            
+
             # 4. Regex Check logic (After the stream for this turn finishes)
             try:
-                match = re.search(r'(\[.*"get_file_content".*\]|\[.*"search_indicators_by_report".*\]|\[.*"search_by_victim".*\]|\[.*"get_reportsID_by_technique".*\]|\[.*"get_reports_by_reportID".*\])', full_turn_response, re.DOTALL)
+                match = re.search(r'(\[.*"get_file_content".*\]|\[.*"search_indicators_by_report".*\]|\[.*"search_by_victim".*\]|\[.*"get_reportsID_by_technique".*\]|\[.*"get_reports_by_reportID".*\]|\[.*"wazuh_agent".*\])', full_turn_response, re.DOTALL)
                 
                 if match:
                     possible_json = match.group(1)
@@ -174,6 +170,9 @@ class MyAgentServer(ChatKitServer[dict[str, Any]]):
                                     res = await get_reportsID_by_technique(**args)
                                 elif name == "get_reports_by_reportID":
                                     res = await get_reports_by_reportID(**args)
+                                elif name == "wazuh_agent":
+                                    print("Wazuh Agent called")
+                                    res = handling_wazuh_agent(item.content[0].text)
                             except Exception as tool_err:
                                 res = f"Tool Execution Error: {tool_err}"
                             
