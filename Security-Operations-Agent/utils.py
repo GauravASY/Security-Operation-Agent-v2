@@ -1,5 +1,7 @@
 import boto3
 from botocore.exceptions import ClientError
+import os
+import requests
 
 
 def upload_file_to_s3(file_name, bucket_name, object_name = None):
@@ -22,3 +24,28 @@ def upload_file_to_s3(file_name, bucket_name, object_name = None):
     except ClientError as e:
         print(e)
         return "Failed to upload file to S3"
+
+
+def get_token(WAZUH_API_URL, WAZUH_API_USER, WAZUH_API_PASS):
+    """
+    Authenticates Wazuh API and returns the JWT token.
+    
+    args:
+        WAZUH_API_URL (str): The URL of the Wazuh API
+        WAZUH_API_USER (str): The username for Wazuh API authentication
+        WAZUH_API_PASS (str): The password for Wazuh API authentication
+    """
+
+    url = f"{WAZUH_API_URL}/security/user/authenticate"
+    response = requests.post(url, auth=(WAZUH_API_USER, WAZUH_API_PASS), verify=False)
+    if response.status_code == 200:
+        return response.json()['data']['token']
+    else:
+        raise Exception(f"Authentication Failed: {response.text}")
+
+def checkEnvVariable(var_name):
+    """Check if an environment variable is set and return its value."""
+    env_var  = os.environ.get(var_name)
+    if not env_var: 
+        return "Missing the environment variable: " + var_name
+    return env_var
