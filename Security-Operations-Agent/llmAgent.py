@@ -50,6 +50,13 @@ extraction_assistant = Agent(
     output_type=ReportExtraction,
 )
 
+wazuh_agent = Agent(
+    name= "Wazuh Agent",
+    instructions= wazuh_agent_prompt,
+    model= custom_model,
+    instructions="handles all the tasks related to Wazuh"
+)
+
 career_assistant = Agent(
     name= "Gaurav",
     instructions= career_assistant_prompt,
@@ -61,5 +68,15 @@ career_assistant = Agent(
         )
     ],
     model = custom_model,
-    tools = [search_indicators_by_report, search_by_victim, get_file_content, get_reportsID_by_technique, get_reports_by_reportID]
+    tools = [
+        search_indicators_by_report, 
+        search_by_victim, 
+        get_file_content, 
+        get_reportsID_by_technique, 
+        get_reports_by_reportID,
+        wazuh_agent.as_tool(
+            tool_name="Wazuh_agent",
+            tool_description="Handles all the tasks related to Wazuh. Performs Wazuh analysis, provides recommendations, and performs Wazuh operations"
+        )
+    ]
 )
