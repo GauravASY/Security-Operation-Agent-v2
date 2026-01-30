@@ -2,6 +2,8 @@ import boto3
 from botocore.exceptions import ClientError
 import os
 import requests
+from agents import Runner
+from llmAgent import wazuh_agent
 
 
 def upload_file_to_s3(file_name, bucket_name, object_name = None):
@@ -49,3 +51,10 @@ def checkEnvVariable(var_name):
     if not env_var: 
         return "Missing the environment variable: " + var_name
     return env_var
+
+def handling_wazuh_agent(query):
+    streamed_result = Runner.run_streamed(wazuh_agent, f"{query}")
+    async for _ in streamed_result.stream_events():
+        pass  
+    print("Wazuh Agent Output: ", streamed_result.final_output)
+    return streamed_result.final_output  
