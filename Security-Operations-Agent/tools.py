@@ -4,6 +4,7 @@ import psycopg2
 import json
 import chromadb
 from database import DB_CONFIG, TARGET_DB
+from utils import get_token, checkEnvVariable
 
 # Connect to DBs
 chroma_client = chromadb.PersistentClient(path="./my_local_db")
@@ -163,3 +164,25 @@ async def get_reports_by_reportID(report_id: int):
         return result
     finally:
         conn.close()
+
+# --- Tool 6: Wazuh Analysis ---
+@function_tool
+async def analyse_wazuh_data(size:int = 20, domain:str = "*"):
+    """
+    Fetches data from the WAZUH API, analyses it and provides report and recommendations for the user
+
+    Args:
+        size (int, optional): Number of events to fetch. Defaults to 20.
+        domain (str, optional): Domain to filter events by. Defaults to "*".
+    """
+    WAZUH_URL = checkEnvVariable("WAZUH_URL")
+    WAZUH_USER = checkEnvVariable("WAZUH_USER")
+    WAZUH_PASS = checkEnvVariable("WAZUH_PASS")
+    WAZUH_API_USER = checkEnvVariable("WAZUH_API_USER")
+    WAZUH_API_PASS = checkEnvVariable("WAZUH_API_PASS")
+    WAZUH_API_URL = checkEnvVariable("WAZUH_API_URL")
+
+    if not WAZUH_URL or not WAZUH_USER or not WAZUH_PASS or not WAZUH_API_USER or not WAZUH_API_PASS or not WAZUH_API_URL:
+        return "Missing Wazuh environment variables"
+    
+    
