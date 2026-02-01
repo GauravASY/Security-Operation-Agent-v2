@@ -78,7 +78,7 @@ async def handling_wazuh_agent(query, context):
                 if hasattr(item_obj, "content") and item_obj.content:
                     for part in item_obj.content:
                         if hasattr(part, "text"):
-                            print("Agent Response: ", part.text[:200] if len(part.text) > 200 else part.text)
+                            print("Agent Response: ", part.text[:100] if len(part.text) > 100 else part.text)
                             full_turn_response += part.text
 
             # Buffer events instead of yielding immediately
