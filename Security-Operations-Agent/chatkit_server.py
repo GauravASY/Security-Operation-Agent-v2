@@ -16,11 +16,11 @@ from utils import handling_wazuh_agent
 
 # Import your tools so they can be executed inside the server
 from tools import (
-    get_file_content, 
-    search_indicators_by_report, 
-    search_by_victim, 
-    get_reportsID_by_technique, 
-    get_reports_by_reportID
+    get_file_content_raw, 
+    search_indicators_by_report_raw, 
+    search_by_victim_raw, 
+    get_reportsID_by_technique_raw, 
+    get_reports_by_reportID_raw
 )
 
 class MyAgentServer(ChatKitServer[dict[str, Any]]):
@@ -87,20 +87,25 @@ class MyAgentServer(ChatKitServer[dict[str, Any]]):
 
             return
                 
-            
+        print("Conversation chain inside respond before adding user message:---------------------------\n ", conversation_chain, "\n------------------------------------------")    
         # adding the user message to the conversation chain if already not present
         if item and item.content and hasattr(item.content[0], 'text'):
-             current_text = item.content[0].text
-             final_text = ""
-             if item.attachments and len(item.attachments) > 0 and hasattr(item.attachments[0], 'name'):
+            current_text = item.content[0].text
+            if item.attachments and len(item.attachments) > 0 and hasattr(item.attachments[0], 'name'):
                 final_text = f"User uploaded a file {item.attachments[0].name} and asked {current_text}" 
-             if not conversation_chain or conversation_chain[-1]['content'] != current_text:
-                 conversation_chain.append({"role": "user", "content": final_text})
-             else:
-                 #remove last item from conversation chain
-                 conversation_chain.pop()
-                 conversation_chain.append({"role": "user", "content": final_text})
+                if not conversation_chain or conversation_chain[-1]['content'] != current_text:
+                    conversation_chain.append({"role": "user", "content": final_text})
+                else:
+                    #remove last item from conversation chain
+                    conversation_chain.pop()
+                    conversation_chain.append({"role": "user", "content": final_text})
+            else:
+                if not conversation_chain or conversation_chain[-1]['content'] != current_text:
+                    conversation_chain.append({"role": "user", "content": current_text})
+                
 
+
+        print("Conversation chain inside respond before loops:---------------------------\n ", conversation_chain, "\n------------------------------------------")
         # 3. Start the ReAct Loop (Max Turns)
         max_turns = 5
         
@@ -141,10 +146,12 @@ class MyAgentServer(ChatKitServer[dict[str, Any]]):
 
             # 4. Regex Check logic (After the stream for this turn finishes)
             try:
-                match = re.search(r'(\[.*"get_file_content".*\]|\[.*"search_indicators_by_report".*\]|\[.*"search_by_victim".*\]|\[.*"get_reportsID_by_technique".*\]|\[.*"get_reports_by_reportID".*\]|\[.*"wazuh_agent".*\])', full_turn_response, re.DOTALL)
+                # Use non-greedy match to capture just the tool call JSON
+                match = re.search(r'(\[.*?"get_file_content".*?\]|\[.*?"search_indicators_by_report".*?\]|\[.*?"search_by_victim".*?\]|\[.*?"get_reportsID_by_technique".*?\]|\[.*?"get_reports_by_reportID".*?\]|\[.*?"wazuh_agent".*?\])', full_turn_response, re.DOTALL)
                 
                 if match:
                     possible_json = match.group(1)
+                    print(f"Attempting to parse tool call JSON: {possible_json}")
                     tool_calls = json.loads(possible_json)
                     if isinstance(tool_calls, list):
                         tool_calls_found = True
@@ -161,19 +168,41 @@ class MyAgentServer(ChatKitServer[dict[str, Any]]):
                             
                             try:
                                 if name == "search_indicators_by_report":
-                                    res = await search_indicators_by_report(**args)
+                                    res = await search_indicators_by_report_raw(**args)
                                 elif name == "get_file_content":
-                                    res = await get_file_content(**args)
+                                    res = await get_file_content_raw(**args)
                                 elif name == "search_by_victim":
-                                    res = await search_by_victim(**args)
+                                    res = await search_by_victim_raw(**args)
                                 elif name == "get_reportsID_by_technique":
-                                    res = await get_reportsID_by_technique(**args)
+                                    res = await get_reportsID_by_technique_raw(**args)
                                 elif name == "get_reports_by_reportID":
-                                    res = await get_reports_by_reportID(**args)
+                                    res = await get_reports_by_reportID_raw(**args)
                                 elif name == "wazuh_agent":
-                                    print("Wazuh Agent called")
-                                    res = handling_wazuh_agent(item.content[0].text)
+                                    print("Wazuh Agent called", item.content[0].text)
+                                    full_wazuh_response = ""
+                                    try:
+                                        async for event in handling_wazuh_agent(item.content[0].text, agent_context):
+                                            yield event
+                                            # Capture text for internal history
+                                            if event.type == "thread.item.done" and hasattr(event, "item"):
+                                                item_obj = event.item
+                                                if hasattr(item_obj, "content") and item_obj.content:
+                                                    for part in item_obj.content:
+                                                        if hasattr(part, "text"):
+                                                            full_wazuh_response += part.text
+                                        res = full_wazuh_response
+                                    except TypeError as te:
+                                        print(f"TypeError iterating wazuh_agent: {te}")
+                                        # Fallback if it somehow became a non-generator (e.g. if utils.py changed)
+                                        # But currently it is a generator.
+                                        res = "Error: wazuh_agent failed to stream"
+                                    except Exception as e:
+                                         print(f"Error streaming wazuh_agent: {e}")
+                                         traceback.print_exc()
+                                         res = f"Error during Wazuh Analysis: {e}"
                             except Exception as tool_err:
+                                print(f"CRITICAL ERROR executing tool {name}: {tool_err}")
+                                traceback.print_exc()
                                 res = f"Tool Execution Error: {tool_err}"
                             
                             tool_outputs.append(res)
@@ -186,8 +215,9 @@ class MyAgentServer(ChatKitServer[dict[str, Any]]):
                         forced_id = f"msg_{uuid.uuid4().hex[:8]}"
                         context["forced_item_id"] = forced_id
                         
-            except json.JSONDecodeError:
-                pass
+            except json.JSONDecodeError as e:
+                print(f"JSON Decode Error for tool call: {e}")
+                print(f"Failed JSON string: {possible_json}")
             except Exception as e:
                 print(f"Error parsing tool call: {e}")
                 traceback.print_exc()
