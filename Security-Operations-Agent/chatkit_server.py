@@ -86,8 +86,7 @@ class MyAgentServer(ChatKitServer[dict[str, Any]]):
             yield ThreadItemDoneEvent(item=assistant_item)
 
             return
-                
-        print("Conversation chain inside respond before adding user message:---------------------------\n ", conversation_chain, "\n------------------------------------------")    
+                  
         # adding the user message to the conversation chain if already not present
         if item and item.content and hasattr(item.content[0], 'text'):
             current_text = item.content[0].text
@@ -104,10 +103,9 @@ class MyAgentServer(ChatKitServer[dict[str, Any]]):
                     conversation_chain.append({"role": "user", "content": current_text})
                 
 
-
-        print("Conversation chain inside respond before loops:---------------------------\n ", conversation_chain, "\n------------------------------------------")
         # 3. Start the ReAct Loop (Max Turns)
         max_turns = 5
+        wazuh_executed_this_turn = False  # Track if wazuh was already executed
         
         for turn in range(max_turns):
             full_turn_response = ""
@@ -144,9 +142,7 @@ class MyAgentServer(ChatKitServer[dict[str, Any]]):
 
                 yield event
 
-            # 4. Regex Check logic (After the stream for this turn finishes)
             try:
-                # Use non-greedy match to capture just the tool call JSON
                 match = re.search(r'(\[.*?"get_file_content".*?\]|\[.*?"search_indicators_by_report".*?\]|\[.*?"search_by_victim".*?\]|\[.*?"get_reportsID_by_technique".*?\]|\[.*?"get_reports_by_reportID".*?\]|\[.*?"wazuh_agent".*?\])', full_turn_response, re.DOTALL)
                 
                 if match:
@@ -156,9 +152,6 @@ class MyAgentServer(ChatKitServer[dict[str, Any]]):
                     if isinstance(tool_calls, list):
                         tool_calls_found = True
                         
-                        # We don't yield "Executing Tool..." text to the UI here because the stream ended.
-                        # The UI typically waits. You could yield a status event if ChatKit supports it.
-
                         tool_outputs = []
                         for call in tool_calls:
                             # --- Execute Tools ---
@@ -178,10 +171,18 @@ class MyAgentServer(ChatKitServer[dict[str, Any]]):
                                 elif name == "get_reports_by_reportID":
                                     res = await get_reports_by_reportID_raw(**args)
                                 elif name == "wazuh_agent":
-                                    print("Wazuh Agent called", item.content[0].text)
+                                    # Prevent re-triggering wazuh_agent if already executed
+                                    if wazuh_executed_this_turn:
+                                        print("Skipping duplicate wazuh_agent call")
+                                        res = "Wazuh analysis already completed."
+                                        continue
+                                    
+                                    # Use the actual query from tool arguments, not original user message
+                                    wazuh_query = args.get("input", item.content[0].text if item and item.content else "Start Wazuh Analysis")
+                                    print("Wazuh Agent called with query:", wazuh_query)
                                     full_wazuh_response = ""
                                     try:
-                                        async for event in handling_wazuh_agent(item.content[0].text, agent_context):
+                                        async for event in handling_wazuh_agent(wazuh_query, agent_context):
                                             yield event
                                             # Capture text for internal history
                                             if event.type == "thread.item.done" and hasattr(event, "item"):
@@ -191,10 +192,10 @@ class MyAgentServer(ChatKitServer[dict[str, Any]]):
                                                         if hasattr(part, "text"):
                                                             full_wazuh_response += part.text
                                         res = full_wazuh_response
+                                        wazuh_executed_this_turn = True  # Mark as executed
+                                        print("Full Wazuh Response: ", res[:100] if len(res) > 100 else res)
                                     except TypeError as te:
                                         print(f"TypeError iterating wazuh_agent: {te}")
-                                        # Fallback if it somehow became a non-generator (e.g. if utils.py changed)
-                                        # But currently it is a generator.
                                         res = "Error: wazuh_agent failed to stream"
                                     except Exception as e:
                                          print(f"Error streaming wazuh_agent: {e}")
