@@ -3,7 +3,10 @@ from botocore.exceptions import ClientError
 import os
 import requests
 from agents import Runner
-from llmAgent import wazuh_agent
+
+import json
+import re
+import traceback
 
 
 def upload_file_to_s3(file_name, bucket_name, object_name = None):
@@ -52,9 +55,72 @@ def checkEnvVariable(var_name):
         return "Missing the environment variable: " + var_name
     return env_var
 
-def handling_wazuh_agent(query):
-    streamed_result = Runner.run_streamed(wazuh_agent, f"{query}")
-    async for _ in streamed_result.stream_events():
-        pass  
-    print("Wazuh Agent Output: ", streamed_result.final_output)
-    return streamed_result.final_output  
+async def handling_wazuh_agent(query, context):
+    print("Query inside handling_wazuh_agent: ", query)
+    from llmAgent import wazuh_agent
+    from chatkit.agents import stream_agent_response
+    from tools import analyse_wazuh_data_raw
+    
+    conversation_chain = [{"role": "user", "content": query}]
+    print("Conversation chain inside handling_wazuh_agent: ", conversation_chain)
+    
+    max_turns = 5
+    for turn in range(max_turns):
+        full_turn_response = ""
+        tool_calls_found = False
+        buffered_events = []  # Buffer events instead of yielding immediately
+
+        streamed_result = Runner.run_streamed(wazuh_agent, conversation_chain)
+        async for event in stream_agent_response(context, streamed_result):
+            # Capture text from thread.item.done events
+            if event.type == "thread.item.done" and hasattr(event, "item"):
+                item_obj = event.item
+                if hasattr(item_obj, "content") and item_obj.content:
+                    for part in item_obj.content:
+                        if hasattr(part, "text"):
+                            print("Agent Response: ", part.text[:200] if len(part.text) > 200 else part.text)
+                            full_turn_response += part.text
+
+            # Buffer events instead of yielding immediately
+            buffered_events.append(event)
+        
+        try:
+            match = re.search(r'(\[.*"analyse_wazuh_data_raw".*\])', full_turn_response, re.DOTALL)
+            
+            if match:
+                possible_json = match.group(1)
+                tool_calls = json.loads(possible_json)
+                if isinstance(tool_calls, list):
+                    tool_calls_found = True
+                    print(f"Tool call detected in turn {turn + 1}, executing...")
+
+                    tool_outputs = []
+                    for call in tool_calls:
+                        res = "Error: Unknown tool"
+                        name = call.get("name")
+                        args = call.get("arguments", {})
+                            
+                        try:
+                            if name == "analyse_wazuh_data_raw":
+                                res = await analyse_wazuh_data_raw(**args)
+                        except Exception as tool_err:
+                            res = f"Tool Execution Error: {tool_err}"
+                            
+                        tool_outputs.append(res)
+                        
+                    # Update Chain for next iteration
+                    conversation_chain.append({"role": "assistant", "content": full_turn_response})
+                    conversation_chain.append({"role": "user", "content": f"Tool Output: {json.dumps(tool_outputs)}"})
+                        
+        except json.JSONDecodeError:
+            pass
+        except Exception as e:
+            print(f"Error parsing tool call: {e}")
+            traceback.print_exc()
+
+        # Only yield events if NO tool call was found (this is the final response)
+        if not tool_calls_found:
+            print(f"Final response in turn {turn + 1}, yielding {len(buffered_events)} events to UI")
+            for event in buffered_events:
+                yield event
+            break
