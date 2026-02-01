@@ -214,7 +214,6 @@ async def analyse_wazuh_data_raw(size: int = 20, domain: str = "*"):
     if not events:
         return "No events found in Wazuh"
     
-    print("Events from Wazuh Agent : \n", events)
     return json.dumps(events, indent=2)
 
 
