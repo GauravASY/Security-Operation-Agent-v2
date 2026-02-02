@@ -105,11 +105,11 @@ class MyAgentServer(ChatKitServer[dict[str, Any]]):
 
         # 3. Start the ReAct Loop (Max Turns)
         max_turns = 5
-        wazuh_executed_this_turn = False  # Track if wazuh was already executed
         
         for turn in range(max_turns):
             full_turn_response = ""
             tool_calls_found = False
+            buffered_events = []  # Buffer events instead of yielding immediately
 
             # Prepare Context
             agent_context = AgentContext(
@@ -140,14 +140,14 @@ class MyAgentServer(ChatKitServer[dict[str, Any]]):
                             if hasattr(part, "text"):
                                 full_turn_response += part.text
 
-                yield event
+                buffered_events.append(event)
 
             try:
                 match = re.search(r'(\[.*?"get_file_content".*?\]|\[.*?"search_indicators_by_report".*?\]|\[.*?"search_by_victim".*?\]|\[.*?"get_reportsID_by_technique".*?\]|\[.*?"get_reports_by_reportID".*?\]|\[.*?"wazuh_agent".*?\])', full_turn_response, re.DOTALL)
                 
                 if match:
                     possible_json = match.group(1)
-                    print(f"Attempting to parse tool call JSON: {possible_json}")
+                    print(f"Main Agent: {possible_json}")
                     tool_calls = json.loads(possible_json)
                     if isinstance(tool_calls, list):
                         tool_calls_found = True
@@ -171,36 +171,31 @@ class MyAgentServer(ChatKitServer[dict[str, Any]]):
                                 elif name == "get_reports_by_reportID":
                                     res = await get_reports_by_reportID_raw(**args)
                                 elif name == "wazuh_agent":
-                                    # Prevent re-triggering wazuh_agent if already executed
-                                    if wazuh_executed_this_turn:
-                                        print("Skipping duplicate wazuh_agent call")
-                                        res = "Wazuh analysis already completed."
-                                        continue
-                                    
-                                    # Use the actual query from tool arguments, not original user message
+                                    # Stream Wazuh response directly to UI in real-time
                                     wazuh_query = args.get("input", item.content[0].text if item and item.content else "Start Wazuh Analysis")
-                                    print("Wazuh Agent called with query:", wazuh_query)
-                                    full_wazuh_response = ""
                                     try:
+                                        wazuh_response_item = None  # Capture the item for saving
+                                        
+                                        # Iterate over the async generator and yield events to UI
                                         async for event in handling_wazuh_agent(wazuh_query, agent_context):
                                             yield event
-                                            # Capture text for internal history
+                                            # Capture the done item for explicit saving
                                             if event.type == "thread.item.done" and hasattr(event, "item"):
-                                                item_obj = event.item
-                                                if hasattr(item_obj, "content") and item_obj.content:
-                                                    for part in item_obj.content:
-                                                        if hasattr(part, "text"):
-                                                            full_wazuh_response += part.text
-                                        res = full_wazuh_response
-                                        wazuh_executed_this_turn = True  # Mark as executed
-                                        print("Full Wazuh Response: ", res[:100] if len(res) > 100 else res)
-                                    except TypeError as te:
-                                        print(f"TypeError iterating wazuh_agent: {te}")
-                                        res = "Error: wazuh_agent failed to stream"
+                                                wazuh_response_item = event.item
+                                        
+                                        # Explicitly save to ensure conversation history is preserved
+                                        if wazuh_response_item:
+                                            await self.store.save_item(thread.id, wazuh_response_item, context)
+                                            print("Wazuh response saved to memory store")
+                                        
+                                        # Exit immediately after Wazuh completes - no second Main Agent call
+                                        print("Wazuh streaming complete, exiting respond method")
+                                        return
+                                        
                                     except Exception as e:
-                                         print(f"Error streaming wazuh_agent: {e}")
-                                         traceback.print_exc()
-                                         res = f"Error during Wazuh Analysis: {e}"
+                                        print(f"Error running wazuh_agent: {e}")
+                                        traceback.print_exc()
+                                        res = f"Error during Wazuh Analysis: {e}"
                             except Exception as tool_err:
                                 print(f"CRITICAL ERROR executing tool {name}: {tool_err}")
                                 traceback.print_exc()
@@ -224,4 +219,6 @@ class MyAgentServer(ChatKitServer[dict[str, Any]]):
                 traceback.print_exc()
 
             if not tool_calls_found:
+                for event in buffered_events:
+                    yield event
                 break
