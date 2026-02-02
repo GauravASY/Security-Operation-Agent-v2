@@ -56,19 +56,25 @@ def checkEnvVariable(var_name):
     return env_var
 
 async def handling_wazuh_agent(query, context):
-    print("Query inside handling_wazuh_agent: ", query)
+    """
+    Runs the Wazuh agent and yields events directly to the UI for real-time streaming.
+    Only the final response (after all tool calls complete) is yielded to the UI.
+    """
     from llmAgent import wazuh_agent
     from chatkit.agents import stream_agent_response
     from tools import analyse_wazuh_data_raw
+    from chatkit.types import ThreadItemAddedEvent, ThreadItemDoneEvent, AssistantMessageItem
+    from datetime import datetime
+    import uuid
     
     conversation_chain = [{"role": "user", "content": query}]
-    print("Conversation chain inside handling_wazuh_agent: ", conversation_chain)
+    print("Wazuh Agent: ", conversation_chain)
     
     max_turns = 5
     for turn in range(max_turns):
         full_turn_response = ""
         tool_calls_found = False
-        buffered_events = []  # Buffer events instead of yielding immediately
+        buffered_events = []  # Buffer events for potential yielding
 
         streamed_result = Runner.run_streamed(wazuh_agent, conversation_chain)
         async for event in stream_agent_response(context, streamed_result):
@@ -78,11 +84,13 @@ async def handling_wazuh_agent(query, context):
                 if hasattr(item_obj, "content") and item_obj.content:
                     for part in item_obj.content:
                         if hasattr(part, "text"):
-                            print("Agent Response: ", part.text[:100] if len(part.text) > 100 else part.text)
+                            print("Wazuh Agent Response: ", part.text[:100] if len(part.text) > 100 else part.text)
                             full_turn_response += part.text
-
-            # Buffer events instead of yielding immediately
-            buffered_events.append(event)
+            
+            # Buffer events BUT skip thread.item.added to prevent duplicate display
+            # thread.item.added contains full content, which would show before streaming
+            if event.type != "thread.item.added":
+                buffered_events.append(event)
         
         try:
             match = re.search(r'(\[.*"analyse_wazuh_data_raw".*\])', full_turn_response, re.DOTALL)
@@ -118,9 +126,21 @@ async def handling_wazuh_agent(query, context):
             print(f"Error parsing tool call: {e}")
             traceback.print_exc()
 
-        # Only yield events if NO tool call was found (this is the final response)
+        # Yield events to UI ONLY when no more tool calls (this is the final response)
         if not tool_calls_found:
-            print(f"Final response in turn {turn + 1}, yielding {len(buffered_events)} events to UI")
             for event in buffered_events:
                 yield event
-            break
+            return  # Exit the generator
+    
+    # Max turns exceeded - yield error message to UI
+    print("Wazuh Agent: Max turns exceeded, yielding error to UI")
+    error_message = "**Max retries exceeded for Wazuh Endpoint**\n. The Wazuh API is not responding. Please check:\n- Wazuh server connectivity\n- Network configuration\n- API credentials\n\nTry again later or contact your administrator."
+    
+    error_item = AssistantMessageItem(
+        id=f"msg_{uuid.uuid4().hex[:8]}",
+        thread_id=context.thread.id,
+        created_at=datetime.utcnow(),
+        content=[{"type": "output_text", "text": error_message}],
+    )
+    yield ThreadItemAddedEvent(item=error_item)
+    yield ThreadItemDoneEvent(item=error_item)
