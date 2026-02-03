@@ -1,10 +1,10 @@
 # Security Operations Agent v2
 
-An intelligent AI-powered security operations assistant that helps analyze threat intelligence reports, extract indicators of compromise (IoCs), and map tactics, techniques, and procedures (TTPs) to the MITRE ATT&CK framework. The system combines natural language processing with structured data storage to enable security analysts to query and analyze threat data through conversational interactions.
+An intelligent AI-powered security operations assistant that helps analyze threat intelligence reports, extract indicators of compromise (IoCs), map tactics, techniques, and procedures (TTPs) to the MITRE ATT&CK framework, and integrates with Wazuh SIEM for real-time security event analysis. The system combines natural language processing with structured data storage to enable security analysts to query and analyze threat data through conversational interactions.
 
 ## Overview
 
-Security Operations Agent v2 is a full-stack application consisting of a FastAPI backend with AI agent capabilities and a React-based chat interface. The system processes uploaded threat intelligence documents, extracts structured security information, and stores it in a PostgreSQL database for efficient querying. Users interact with the system through a chat interface powered by OpenAI's ChatKit, enabling natural language queries about threat reports, IoCs, victim sectors, and attack techniques.
+Security Operations Agent v2 is a full-stack application consisting of a FastAPI backend with AI agent capabilities and a React-based chat interface. The system processes uploaded threat intelligence documents, extracts structured security information, and stores it in a PostgreSQL database for efficient querying. Additionally, it integrates with Wazuh SIEM to fetch, analyze, and provide actionable insights on security events in real-time. Users interact with the system through a chat interface powered by OpenAI's ChatKit, enabling natural language queries about threat reports, IoCs, victim sectors, attack techniques, and live security events.
 
 ## Architecture
 
@@ -13,16 +13,17 @@ The application follows a client-server architecture with the following componen
 ### Backend Architecture
 
 - **FastAPI Server**: Handles HTTP requests, file uploads, and WebSocket connections for streaming responses
-- **AI Agent System**: Multi-agent architecture using OpenAI Agents framework with handoffs between specialized agents
+- **AI Agent System**: Multi-agent architecture using OpenAI Agents framework with tool-as-agent pattern and handoffs between specialized agents
 - **Vector Database**: ChromaDB for semantic search over uploaded documents
 - **Relational Database**: PostgreSQL for structured storage of threat intelligence data including reports, IoCs, and TTPs
 - **File Storage**: AWS S3 integration for persistent document storage
 - **Document Processing**: Unstructured library for extracting text from various document formats
+- **Wazuh SIEM Integration**: Real-time security event fetching and analysis via Wazuh API
 
 ### Frontend Architecture
 
 - **React 19**: Modern UI framework with latest features
-- **OpenAI ChatKit**: Pre-built chat interface components
+- **OpenAI ChatKit**: Pre-built chat interface components with real-time streaming support
 - **Vite**: Fast build tool and development server
 - **TypeScript**: Type-safe development experience
 
@@ -34,7 +35,7 @@ The application follows a client-server architecture with the following componen
 4. AI agent analyzes document and extracts structured data (IoCs, TTPs, victim info)
 5. Structured data is stored in PostgreSQL for efficient querying
 6. Users query the system through natural language, which is processed by specialized agents
-7. Agents retrieve relevant information from vector store and/or SQL database
+7. Agents retrieve relevant information from vector store, SQL database, or Wazuh SIEM
 8. Results are streamed back to the user interface in real-time
 
 
@@ -56,13 +57,23 @@ The application follows a client-server architecture with the following componen
   - Retrieving full report content
   - Semantic search across uploaded documents
 
+- **Wazuh SIEM Integration**: 
+  - Real-time security event fetching from Wazuh
+  - AI-powered analysis of security alerts
+  - Domain-specific event filtering
+  - Automated risk assessment and recommendations
+  - Streaming analysis results directly to the UI
+
 - **Multi-Agent System**: Specialized agents with distinct capabilities:
-  - Main Agent: Primary interface for user interactions and tool orchestrationss
-  - Analysis Agent: Specialized in threat analysis and report processing
+  - **Main Agent (Gaurav)**: Primary interface for user interactions and tool orchestration. Determines which tools or agents to invoke based on user queries.
+  - **Extraction Agent**: Handles structured data extraction from threat intelligence documents with Pydantic schema validation for IoCs, TTPs, and report metadata.
+  - **Wazuh Agent**: Dedicated agent for Wazuh SIEM operations. Fetches security events via the Wazuh API, performs analysis, and provides security recommendations with risk assessments.
 
 ### Technical Features
 
-- **Real-time Streaming**: WebSocket-based streaming for agent responses
+- **Real-time Streaming**: WebSocket-based streaming for agent responses with direct UI streaming for Wazuh analysis
+- **Tool-as-Agent Pattern**: Wazuh agent is exposed as a tool to the main agent, enabling seamless delegation
+- **ReAct Loop Architecture**: Multi-turn reasoning with tool execution for complex queries
 - **File Upload with Two-Phase Strategy**: Efficient handling of large file uploads
 - **Vector Similarity Search**: Semantic search capabilities using embeddings
 - **Structured Database Queries**: SQL-based filtering and aggregation
@@ -83,6 +94,7 @@ The application follows a client-server architecture with the following componen
 - **LLM Provider**: Access to a language model API (OpenAI, Anthropic, or compatible endpoint)
 - **PostgreSQL Database**: Local or remote PostgreSQL instance
 - **AWS S3 Bucket**: For document storage (optional)
+- **Wazuh SIEM**: Access to a Wazuh indexer/Elasticsearch endpoint for security event analysis (optional but required for Wazuh features)
 
 ## Environment Setup
 
@@ -155,6 +167,11 @@ The application follows a client-server architecture with the following componen
    AWS_SECRET_ACCESS_KEY=your_secret_key
    S3_BUCKET_NAME=your_bucket_name
    AWS_REGION=us-east-1
+
+   # Wazuh SIEM Configuration (Required for Wazuh integration)
+   WAZUH_URL=https://your-wazuh-server:9200/_search  # Wazuh indexer/Elasticsearch endpoint
+   WAZUH_USER=your_wazuh_username
+   WAZUH_PASS=your_wazuh_password
    ```
 
 7. **Initialize the database**
@@ -231,7 +248,7 @@ Open your browser and navigate to `http://localhost:5173`
 
 ### Querying the System
 
-Example queries you can make:
+**Threat Intelligence Queries:**
 
 - "Show me all reports targeting the healthcare sector"
 - "What are the IoCs for report ID 5?"
@@ -240,14 +257,31 @@ Example queries you can make:
 - "Search for information about ransomware attacks"
 - "What techniques are associated with report 3?"
 
-### Agent Handoffs
+**Wazuh SIEM Queries:**
 
-The system uses a multi-agent architecture. When you ask for analysis or threat intelligence queries, you may see:
-```
-Delegating Analyses to Analysis Agent
-```
+- "Start Wazuh analysis"
+- "Analyze the last 50 security events from Wazuh"
+- "Show me Wazuh alerts for domain example.com"
+- "What security events occurred in the last hour?"
+- "Analyze Wazuh data and provide recommendations"
 
-This indicates the primary agent is handing off the task to a specialized analysis agent.
+### Agent Delegation
+
+The system uses a multi-agent architecture with intelligent delegation:
+
+**Extraction Agent:**
+When you upload a threat report, you may see:
+```
+Delegating Extraction to Extraction Agent
+```
+This indicates the main agent is delegating structured data extraction to the specialized Extraction Agent.
+
+**Wazuh Agent:**
+When you request Wazuh analysis, the main agent automatically invokes the Wazuh Agent as a tool. The Wazuh Agent:
+1. Fetches security events from your Wazuh SIEM
+2. Analyzes the events using AI
+3. Streams the analysis results directly to your interface in real-time
+4. Provides risk assessments and actionable recommendations
 
 ### Building for Production
 
@@ -287,6 +321,13 @@ gunicorn main:app -w 4 -k uvicorn.workers.UvicornWorker
 - Verify API key is valid
 - Check endpoint URL is correct
 - Ensure model name is supported by your provider
+
+**Wazuh SIEM connection errors:**
+- Verify Wazuh indexer/Elasticsearch is accessible from your network
+- Check `WAZUH_URL`, `WAZUH_USER`, and `WAZUH_PASS` in `.env` file
+- Ensure the Wazuh user has permissions to query the security events index
+- If using self-signed certificates, note that SSL verification is disabled by default
+- Check Wazuh server logs for authentication failures
 
 ### Frontend Issues
 
