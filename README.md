@@ -94,7 +94,7 @@ The application follows a client-server architecture with the following componen
 - **LLM Provider**: Access to a language model API (OpenAI, Anthropic, or compatible endpoint)
 - **PostgreSQL Database**: Local or remote PostgreSQL instance
 - **AWS S3 Bucket**: For document storage (optional)
-- **Wazuh SIEM**: Access to a Wazuh indexer/Elasticsearch endpoint for security event analysis (optional but required for Wazuh features)
+- **Wazuh SIEM**: Access to a Wazuh indexer endpoint for security event analysis (optional but required for Wazuh features)
 
 ## Environment Setup
 
@@ -169,7 +169,7 @@ The application follows a client-server architecture with the following componen
    AWS_REGION=us-east-1
 
    # Wazuh SIEM Configuration (Required for Wazuh integration)
-   WAZUH_URL=https://your-wazuh-server:9200/_search  # Wazuh indexer/Elasticsearch endpoint
+   WAZUH_URL=https://your-wazuh-server:9200/_search  # Wazuh indexer endpoint
    WAZUH_USER=your_wazuh_username
    WAZUH_PASS=your_wazuh_password
    ```
@@ -323,7 +323,7 @@ gunicorn main:app -w 4 -k uvicorn.workers.UvicornWorker
 - Ensure model name is supported by your provider
 
 **Wazuh SIEM connection errors:**
-- Verify Wazuh indexer/Elasticsearch is accessible from your network
+- Verify Wazuh indexer is accessible from your network
 - Check `WAZUH_URL`, `WAZUH_USER`, and `WAZUH_PASS` in `.env` file
 - Ensure the Wazuh user has permissions to query the security events index
 - If using self-signed certificates, note that SSL verification is disabled by default
