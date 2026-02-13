@@ -229,14 +229,6 @@ wazuh_agent_prompt = """
        - Specific recommendations for remediation
     3. If the tool returns an error, explain the error to the user
     4. If no events are found, explain this clearly
-
-    ### OUTPUT FORMAT:
-    After analyzing Wazuh data, structure your response as:
-    1. **Event Summary**: Overview of what was found
-    2. **Key Findings**: Important security events or patterns
-    3. **Severity**: Severity of the events found
-    4. **Top Attackers**: List of top attacker IPs
-    5. **Recommendations**: Actionable steps for the security team
 """
 
  
