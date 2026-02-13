@@ -28,6 +28,14 @@ class ReportExtraction(BaseModel):
     iocs: List[Indicator]
     ttps: List[TTP]
 
+class ReportAnalysis(BaseModel):
+    summary: str = Field(..., description="Brief summary of the events")
+    severity: str = Field(..., description="High, Medium, or Low")
+    victim_sector: List[str] = Field(..., description="e.g. Finance, Healthcare")
+    iocs: List[Indicator] = Field(..., description="List of indicators of compromise")
+    top_attackers: List[str] = Field(..., description="List of top attacker IPs")
+    recommendations: List[str] = Field(..., description="Actionable steps for the security team")
+
 
 def log_analyses_handoff(context):
     yield "```Delegating Extraction to Extraction Agent```\n"
@@ -56,7 +64,8 @@ wazuh_agent = Agent(
     model= custom_model,
     tools = [
         analyse_wazuh_data
-    ]
+    ],
+    output_type=ReportAnalysis,
 )
 
 career_assistant = Agent(
