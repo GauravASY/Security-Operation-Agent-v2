@@ -162,8 +162,7 @@ async def get_reports_by_reportID_raw(report_id: int):
 
 async def analyse_wazuh_data_raw(size: int = 20, domain: str = "*"):
     """
-    Fetches data from the WAZUH, analyses it and provides report and recommendations for the user
-
+    Fetches security events from the WAZUH
     Args:
         size (int, optional): Number of events to fetch. Defaults to 20.
         domain (str, optional): Domain to filter events by. Defaults to "*".
@@ -217,10 +216,9 @@ async def analyse_wazuh_data_raw(size: int = 20, domain: str = "*"):
     return json.dumps(events, indent=2)
 
 
-# =============================================================================
 # TOOL WRAPPERS (for use in Agent definitions)
 # These are FunctionTool objects for registering with agents
-# =============================================================================
+
 
 search_knowledge_base = function_tool(search_knowledge_base_raw)
 search_indicators_by_report = function_tool(search_indicators_by_report_raw)
