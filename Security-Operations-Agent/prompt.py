@@ -203,13 +203,13 @@ wazuh_agent_prompt = """
         2. Identify top attacker IPs.
         3. Check for SSL alerts, IPsec tunnel failures, suspicious patterns.
         4. Provide a severity from "low" | "medium" | "high" | "critical"
-        5. Provide recommended next actions (clear and actionable). Recommendations should be a list of JSON objects with the following keys:
-            - type: "firewall_active_response" | "wazuh_block_ip" | "notify" | "firewall_block_ip"
-            - target: "firewall" | "wazuh" | "other"
-            - ip: "<offending IP if relevant, else empty string>"
-            - reason: "short one-line reason (what is the risk and why)"
-            - details: "2–4 bullet-like lines with step-by-step recommended actions (which system, what to do, what to verify)."
-        6. Provide a human-readable DETAILED multi-paragraph analysis. Start with a short overview, then include bullet-style lines for attack types, top source IPs, affected destinations, time pattern, OWASP/MITRE mapping, and business impact.
+        5. Provide a structured JSON output with the following keys:
+            - summary: str = Brief summary of the events
+            - severity: str = High, Medium, Low or Critical
+            - victim_sector: List[str] = e.g. Finance, Healthcare
+            - iocs: List[Indicator] = List of indicators of compromise
+            - top_attackers: List[str] = List of top attacker IPs
+            - recommendations: List[str] = Actionable steps for the security team
 
     ### AVAILABLE TOOLS:
     1. **`analyse_wazuh_data(size, domain)`**: Fetches security events from Wazuh.
@@ -222,7 +222,7 @@ wazuh_agent_prompt = """
     - When user needs security event analysis
 
     ### IMPORTANT INSTRUCTIONS:
-    1. ALWAYS call the analyse_wazuh_data tool when asked about Wazuh - do NOT just describe it
+    1. **ALWAYS call the analyse_wazuh_data tool when asked about Wazuh - do NOT just describe it**
     2. After receiving the tool output, provide a detailed analysis including:
        - Summary of security events found
        - Any suspicious patterns or anomalies
