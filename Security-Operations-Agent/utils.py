@@ -93,7 +93,7 @@ async def handling_wazuh_agent(query, context):
                 buffered_events.append(event)
         
         try:
-            match = re.search(r'(\[.*"analyse_wazuh_data_raw".*\])', full_turn_response, re.DOTALL)
+            match = re.search(r'(\[\s*\{\s*"name"\s*:\s*"(?:analyse_wazuh_data|analyse_wazuh_data_raw)".*?\])', full_turn_response, re.DOTALL)
             
             if match:
                 possible_json = match.group(1)
@@ -109,7 +109,7 @@ async def handling_wazuh_agent(query, context):
                         args = call.get("arguments", {})
                             
                         try:
-                            if name == "analyse_wazuh_data_raw":
+                            if name in ("analyse_wazuh_data_raw", "analyse_wazuh_data"):
                                 res = await analyse_wazuh_data_raw(**args)
                         except Exception as tool_err:
                             res = f"Tool Execution Error: {tool_err}"
