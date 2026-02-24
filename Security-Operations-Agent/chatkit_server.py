@@ -143,11 +143,11 @@ class MyAgentServer(ChatKitServer[dict[str, Any]]):
                 buffered_events.append(event)
 
             try:
-                match = re.search(r'(\[.*?"get_file_content".*?\]|\[.*?"search_indicators_by_report".*?\]|\[.*?"search_by_victim".*?\]|\[.*?"get_reportsID_by_technique".*?\]|\[.*?"get_reports_by_reportID".*?\]|\[.*?"wazuh_agent".*?\])', full_turn_response, re.DOTALL)
+                match = re.search(r'(\[\s*\{\s*"name"\s*:\s*"(?:get_file_content|get_file_content_raw|search_indicators_by_report|search_indicators_by_report_raw|search_by_victim|search_by_victim_raw|get_reportsID_by_technique|get_reportsID_by_technique_raw|get_reports_by_reportID|get_reports_by_reportID_raw|wazuh_agent|analyse_wazuh_data|analyse_wazuh_data_raw)".*?\])', full_turn_response, re.DOTALL)
                 
                 if match:
                     possible_json = match.group(1)
-                    print(f"Main Agent: {possible_json}")
+                    print(f"Main Agent from line 150: {possible_json}")
                     tool_calls = json.loads(possible_json)
                     if isinstance(tool_calls, list):
                         tool_calls_found = True
@@ -156,7 +156,10 @@ class MyAgentServer(ChatKitServer[dict[str, Any]]):
                         for call in tool_calls:
                             # --- Execute Tools ---
                             res = "Error: Unknown tool"
-                            name = call.get("name")
+                            name = call.get("name", "")
+                            # Normalize: strip _raw suffix so both variants work
+                            if name.endswith("_raw"):
+                                name = name[:-4]
                             args = call.get("arguments", {})
                             
                             try:
@@ -172,7 +175,9 @@ class MyAgentServer(ChatKitServer[dict[str, Any]]):
                                     res = await get_reports_by_reportID_raw(**args)
                                 elif name == "wazuh_agent":
                                     # Stream Wazuh response directly to UI in real-time
-                                    wazuh_query = args.get("input", item.content[0].text if item and item.content else "Start Wazuh Analysis")
+                                    # Always use the model's explicit input arg, never fall back to
+                                    # item.content which may contain prior conversation context
+                                    wazuh_query = args.get("input", "Start Wazuh Analysis")
                                     try:
                                         wazuh_response_item = None  # Capture the item for saving
                                         
