@@ -177,7 +177,7 @@ class MyAgentServer(ChatKitServer[dict[str, Any]]):
                                     # Stream Wazuh response directly to UI in real-time
                                     # Always use the model's explicit input arg, never fall back to
                                     # item.content which may contain prior conversation context
-                                    wazuh_query = args.get("input", "Start Wazuh Analysis")
+                                    wazuh_query = "Start Wazuh Analysis"
                                     try:
                                         wazuh_response_item = None  # Capture the item for saving
                                         
