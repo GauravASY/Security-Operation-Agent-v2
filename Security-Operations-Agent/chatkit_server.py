@@ -60,7 +60,11 @@ class MyAgentServer(ChatKitServer[dict[str, Any]]):
             # create conversation chain for text and attachments( consider user/assistant/user/assistant constraint)
             if db_item.content and len(db_item.content) > 0:
                  if hasattr(db_item.content[0], 'text'):
-                    conversation_chain.append({"role": role, "content": db_item.content[0].text})
+                    # Merge consecutive same-role messages to maintain strict alternation
+                    if conversation_chain and conversation_chain[-1]['role'] == role:
+                        conversation_chain[-1]['content'] += "\n" + db_item.content[0].text
+                    else:
+                        conversation_chain.append({"role": role, "content": db_item.content[0].text})
 
         # Add the current new item if it exists and isn't in DB yet
         # Check if the last message in chain is the same as item to avoid duplication.
@@ -125,8 +129,7 @@ class MyAgentServer(ChatKitServer[dict[str, Any]]):
                 conversation_chain, 
                 context=agent_context,
             )
-
-            # Stream response to client AND capture text for regex
+            
             async for event in stream_agent_response(agent_context, result):
                 # Patch the stream events to use the forced ID
                 if hasattr(event, "item_id") and (event.item_id == "__fake_id__" or not event.item_id):
@@ -154,7 +157,6 @@ class MyAgentServer(ChatKitServer[dict[str, Any]]):
                         
                         tool_outputs = []
                         for call in tool_calls:
-                            # --- Execute Tools ---
                             res = "Error: Unknown tool"
                             name = call.get("name", "")
                             # Normalize: strip _raw suffix so both variants work
@@ -174,21 +176,15 @@ class MyAgentServer(ChatKitServer[dict[str, Any]]):
                                 elif name == "get_reports_by_reportID":
                                     res = await get_reports_by_reportID_raw(**args)
                                 elif name == "wazuh_agent":
-                                    # Stream Wazuh response directly to UI in real-time
-                                    # Always use the model's explicit input arg, never fall back to
-                                    # item.content which may contain prior conversation context
                                     wazuh_query = "Start Wazuh Analysis"
                                     try:
-                                        wazuh_response_item = None  # Capture the item for saving
+                                        wazuh_response_item = None  
                                         
-                                        # Iterate over the async generator and yield events to UI
                                         async for event in handling_wazuh_agent(wazuh_query, agent_context):
                                             yield event
-                                            # Capture the done item for explicit saving
                                             if event.type == "thread.item.done" and hasattr(event, "item"):
                                                 wazuh_response_item = event.item
                                         
-                                        # Explicitly save to ensure conversation history is preserved
                                         if wazuh_response_item:
                                             await self.store.save_item(thread.id, wazuh_response_item, context)
                                             print("Wazuh response saved to memory store")
@@ -210,9 +206,9 @@ class MyAgentServer(ChatKitServer[dict[str, Any]]):
                         
                         # Update Chain for next iteration
                         conversation_chain.append({"role": "assistant", "content": full_turn_response})
-                        conversation_chain.append({"role": "user", "content": f"Tool Output: {json.dumps(tool_outputs)}"})
+                        conversation_chain.append({"role": "user", "content": f"Tool Output: {json.dumps(tool_outputs, default=str)}"})
                         
-                        # Generate a NEW ID for the next chunk of text (the answer after tools)
+                        # Generate a NEW ID for the next chunk of text 
                         forced_id = f"msg_{uuid.uuid4().hex[:8]}"
                         context["forced_item_id"] = forced_id
                         
