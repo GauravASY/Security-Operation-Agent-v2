@@ -23,6 +23,14 @@ from tools import (
     get_reports_by_reportID_raw
 )
 
+def sanitize_tool_json(json_str: str) -> str:
+    """Fix common JSON malformations from LLM output (e.g. leading/trailing commas)."""
+    # Remove leading comma after opening bracket: [, {...}] -> [{...}]
+    json_str = re.sub(r'\[\s*,', '[', json_str)
+    # Remove trailing comma before closing bracket: [{...},] -> [{...}]
+    json_str = re.sub(r',\s*\]', ']', json_str)
+    return json_str
+
 class MyAgentServer(ChatKitServer[dict[str, Any]]):
     """Server implementation that keeps conversation state in memory."""
 
@@ -150,6 +158,7 @@ class MyAgentServer(ChatKitServer[dict[str, Any]]):
                 
                 if match:
                     possible_json = match.group(1)
+                    possible_json = sanitize_tool_json(possible_json)
                     print(f"Main Agent from line 150: {possible_json}")
                     tool_calls = json.loads(possible_json)
                     if isinstance(tool_calls, list):

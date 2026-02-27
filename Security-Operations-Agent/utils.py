@@ -8,6 +8,12 @@ import json
 import re
 import traceback
 
+def sanitize_tool_json(json_str: str) -> str:
+    """Fix common JSON malformations from LLM output (e.g. leading/trailing commas)."""
+    json_str = re.sub(r'\[\s*,', '[', json_str)
+    json_str = re.sub(r',\s*\]', ']', json_str)
+    return json_str
+
 
 def upload_file_to_s3(file_name, bucket_name, object_name = None):
     """
@@ -97,6 +103,7 @@ async def handling_wazuh_agent(query, context):
             
             if match:
                 possible_json = match.group(1)
+                possible_json = sanitize_tool_json(possible_json)
                 tool_calls = json.loads(possible_json)
                 if isinstance(tool_calls, list):
                     tool_calls_found = True
