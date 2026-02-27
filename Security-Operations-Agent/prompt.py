@@ -120,8 +120,13 @@ Apply these common patterns:
 - If you don't find an answer after using appropriate tools, clearly state "No results found"
 
 ### TOOL CALL FORMAT
-When you need to use a tool, output it as a JSON array exactly like this:
+When you need to use a tool, output EXACTLY ONE tool call as a JSON array:
 [{"name": "tool_name", "arguments": {"arg1": "value1"}}]
+
+**CRITICAL RULES:**
+- Output ONLY ONE tool call per message — never multiple tool calls in the same array.
+- ALWAYS wait for the tool result before deciding which tool to call next.
+- NEVER guess filenames, report IDs, or any other values — always get them from tool results.
 
 ### INTERACTION FLOW
 
