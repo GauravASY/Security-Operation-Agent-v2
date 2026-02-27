@@ -116,7 +116,7 @@ class MyAgentServer(ChatKitServer[dict[str, Any]]):
                 
 
         # 3. Start the ReAct Loop (Max Turns)
-        max_turns = 5
+        max_turns = 10
         
         for turn in range(max_turns):
             full_turn_response = ""
@@ -152,7 +152,6 @@ class MyAgentServer(ChatKitServer[dict[str, Any]]):
                                 full_turn_response += part.text
 
                 buffered_events.append(event)
-
             try:
                 match = re.search(r'(\[\s*\{\s*"name"\s*:\s*"(?:get_file_content|get_file_content_raw|search_indicators_by_report|search_indicators_by_report_raw|search_by_victim|search_by_victim_raw|get_reportsID_by_technique|get_reportsID_by_technique_raw|get_reports_by_reportID|get_reports_by_reportID_raw|wazuh_agent|analyse_wazuh_data|analyse_wazuh_data_raw)".*?\])', full_turn_response, re.DOTALL)
                 
@@ -164,54 +163,59 @@ class MyAgentServer(ChatKitServer[dict[str, Any]]):
                     if isinstance(tool_calls, list):
                         tool_calls_found = True
                         
-                        tool_outputs = []
-                        for call in tool_calls:
-                            res = "Error: Unknown tool"
-                            name = call.get("name", "")
-                            # Normalize: strip _raw suffix so both variants work
-                            if name.endswith("_raw"):
-                                name = name[:-4]
-                            args = call.get("arguments", {})
-                            
-                            try:
-                                if name == "search_indicators_by_report":
-                                    res = await search_indicators_by_report_raw(**args)
-                                elif name == "get_file_content":
-                                    res = await get_file_content_raw(**args)
-                                elif name == "search_by_victim":
-                                    res = await search_by_victim_raw(**args)
-                                elif name == "get_reportsID_by_technique":
-                                    res = await get_reportsID_by_technique_raw(**args)
-                                elif name == "get_reports_by_reportID":
-                                    res = await get_reports_by_reportID_raw(**args)
-                                elif name == "wazuh_agent":
-                                    wazuh_query = "Start Wazuh Analysis"
-                                    try:
-                                        wazuh_response_item = None  
-                                        
-                                        async for event in handling_wazuh_agent(wazuh_query, agent_context):
-                                            yield event
-                                            if event.type == "thread.item.done" and hasattr(event, "item"):
-                                                wazuh_response_item = event.item
-                                        
-                                        if wazuh_response_item:
-                                            await self.store.save_item(thread.id, wazuh_response_item, context)
-                                            print("Wazuh response saved to memory store")
-                                        
-                                        # Exit immediately after Wazuh completes - no second Main Agent call
-                                        print("Wazuh streaming complete, exiting respond method")
-                                        return
-                                        
-                                    except Exception as e:
-                                        print(f"Error running wazuh_agent: {e}")
-                                        traceback.print_exc()
-                                        res = f"Error during Wazuh Analysis: {e}"
-                            except Exception as tool_err:
-                                print(f"CRITICAL ERROR executing tool {name}: {tool_err}")
-                                traceback.print_exc()
-                                res = f"Tool Execution Error: {tool_err}"
-                            
-                            tool_outputs.append(res)
+                        # Only execute the FIRST tool call to enforce sequential reasoning.
+                        # The model must see one result before deciding the next step.
+                        call = tool_calls[0]
+                        res = "Error: Unknown tool"
+                        name = call.get("name", "")
+                        # Normalize: strip _raw suffix so both variants work
+                        if name.endswith("_raw"):
+                            name = name[:-4]
+                        args = call.get("arguments", {})
+                        
+                        try:
+                            if name == "search_indicators_by_report":
+                                res = await search_indicators_by_report_raw(**args)
+                            elif name == "get_file_content":
+                                res = await get_file_content_raw(**args)
+                            elif name == "search_by_victim":
+                                res = await search_by_victim_raw(**args)
+                            elif name == "get_reportsID_by_technique":
+                                res = await get_reportsID_by_technique_raw(**args)
+                            elif name == "get_reports_by_reportID":
+                                res = await get_reports_by_reportID_raw(**args)
+                            elif name == "wazuh_agent":
+                                wazuh_query = "Start Wazuh Analysis"
+                                # Generate a dedicated ID for wazuh events to avoid collision
+                                wazuh_forced_id = f"msg_{uuid.uuid4().hex[:8]}"
+                                try:
+                                    
+                                    async for event in handling_wazuh_agent(wazuh_query, agent_context):
+                                        # Patch item_id on wazuh events to match wazuh_forced_id
+                                        # LiteLLM assigns __fake_id__ which causes client to
+                                        # not associate streaming updates with the done event
+                                        if hasattr(event, "item_id"):
+                                            event.item_id = wazuh_forced_id
+                                        if hasattr(event, "item") and hasattr(event.item, "id"):
+                                            event.item.id = wazuh_forced_id
+                                        print(f"[DEBUG WAZUH YIELD] event.type={event.type} item_id={getattr(event, 'item_id', getattr(getattr(event, 'item', None), 'id', 'N/A'))}")
+                                        yield event
+                                    
+                                    # ChatKit's _process_events auto-saves ThreadItemDoneEvent
+                                    # so no explicit save_item needed here.
+                                    print("Wazuh streaming complete, exiting respond method")
+                                    return
+                                    
+                                except Exception as e:
+                                    print(f"Error running wazuh_agent: {e}")
+                                    traceback.print_exc()
+                                    res = f"Error during Wazuh Analysis: {e}"
+                        except Exception as tool_err:
+                            print(f"CRITICAL ERROR executing tool {name}: {tool_err}")
+                            traceback.print_exc()
+                            res = f"Tool Execution Error: {tool_err}"
+                        
+                        tool_outputs = [res]
                         
                         # Update Chain for next iteration
                         conversation_chain.append({"role": "assistant", "content": full_turn_response})

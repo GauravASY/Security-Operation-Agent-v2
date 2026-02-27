@@ -93,10 +93,8 @@ async def handling_wazuh_agent(query, context):
                             print("Wazuh Agent Response: ", part.text[:100] if len(part.text) > 100 else part.text)
                             full_turn_response += part.text
             
-            # Buffer events BUT skip thread.item.added to prevent duplicate display
-            # thread.item.added contains full content, which would show before streaming
-            if event.type != "thread.item.added":
-                buffered_events.append(event)
+            # Buffer ALL events for proper ChatKit lifecycle (added → updates → done)
+            buffered_events.append(event)
         
         try:
             match = re.search(r'(\[\s*\{\s*"name"\s*:\s*"(?:analyse_wazuh_data|analyse_wazuh_data_raw)".*?\])', full_turn_response, re.DOTALL)
