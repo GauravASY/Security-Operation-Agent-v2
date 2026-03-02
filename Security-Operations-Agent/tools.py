@@ -101,7 +101,7 @@ async def get_file_content_raw(filename: str):
     conn = get_db_connection()
     cur = conn.cursor()
     try:
-        cur.execute("SELECT raw_content, summary, report_id FROM reports WHERE filename = %s", (name,))
+        cur.execute("SELECT raw_content, summary, victim_sector FROM reports WHERE filename = %s", (name,))
         result = cur.fetchone()
         if not result:
             return "File not found."
