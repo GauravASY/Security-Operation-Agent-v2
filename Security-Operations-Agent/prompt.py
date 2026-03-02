@@ -127,6 +127,14 @@ When you need to use a tool, output EXACTLY ONE tool call as a JSON array:
 - Output ONLY ONE tool call per message — never multiple tool calls in the same array.
 - ALWAYS wait for the tool result before deciding which tool to call next.
 - NEVER guess filenames, report IDs, or any other values — always get them from tool results.
+- NEVER repeat a tool call with the same name AND same arguments. If you already called a tool and received its result, USE the result — do NOT call the same tool again.
+
+### TOOL OUTPUT FORMAT
+After you emit a tool call, you will receive the result in your next turn as a user message in this format:
+```
+Tool Result [tool_name]: <result data>
+```
+When you see this, it means the tool has ALREADY been executed and you have the result. Use the data directly to formulate your next step. Do NOT call the same tool again.
 
 ### INTERACTION FLOW
 
