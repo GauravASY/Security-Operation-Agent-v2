@@ -198,7 +198,6 @@ class MyAgentServer(ChatKitServer[dict[str, Any]]):
                                             event.item_id = wazuh_forced_id
                                         if hasattr(event, "item") and hasattr(event.item, "id"):
                                             event.item.id = wazuh_forced_id
-                                        print(f"[DEBUG WAZUH YIELD] event.type={event.type} item_id={getattr(event, 'item_id', getattr(getattr(event, 'item', None), 'id', 'N/A'))}")
                                         yield event
                                     
                                     # ChatKit's _process_events auto-saves ThreadItemDoneEvent
@@ -219,7 +218,7 @@ class MyAgentServer(ChatKitServer[dict[str, Any]]):
                         
                         # Update Chain for next iteration
                         conversation_chain.append({"role": "assistant", "content": full_turn_response})
-                        conversation_chain.append({"role": "user", "content": f"Tool Output: {json.dumps(tool_outputs, default=str)}"})
+                        conversation_chain.append({"role": "user", "content": f"Tool Result [{name}]: {json.dumps(tool_outputs, default=str)}"})
                         
                         # Generate a NEW ID for the next chunk of text 
                         forced_id = f"msg_{uuid.uuid4().hex[:8]}"
